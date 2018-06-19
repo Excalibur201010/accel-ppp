@@ -11,7 +11,6 @@ SET(sources
 	statPPPOE.c
 	statPPTP.c
 	statIPOE.c
-	statSSTP.c
 	terminate.c
 	shutdown.c
 	exec_cli.c

@@ -45,7 +45,6 @@ extern "C" {
 #define SESTYPE_L2TP  2 
 #define SESTYPE_PPPOE  3 
 #define SESTYPE_IPOE  4 
-#define SESTYPE_SSTP  6 
 
 #endif /* SESTYPE_ENUMS */
 
