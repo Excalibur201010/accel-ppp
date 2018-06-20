@@ -35,11 +35,7 @@
 #define NETIF_F_HW_VLAN_FILTER NETIF_F_HW_VLAN_CTAG_FILTER
 #endif
 
-#ifndef RHEL_MAJOR
-#define RHEL_MAJOR 0
-#endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,0,0) || RHEL_MAJOR == 7
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,0,0)
 #define vlan_tx_tag_present(skb) skb_vlan_tag_present(skb)
 #endif
 
@@ -71,7 +67,7 @@ static DEFINE_SPINLOCK(vlan_lock);
 static struct work_struct vlan_notify_work;
 
 static struct genl_family vlan_mon_nl_family;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) && RHEL_MAJOR < 7
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 static struct genl_multicast_group vlan_mon_nl_mcg;
 #endif
 
@@ -134,7 +130,7 @@ static int vlan_pt_recv(struct sk_buff *skb, struct net_device *dev, struct pack
 	if (vid > 0) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
 		struct net_device *vd = __vlan_find_dev_deep(dev, vid);
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0) && RHEL_MAJOR < 7
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
 		struct net_device *vd = __vlan_find_dev_deep(dev, skb->vlan_proto, vid);
 #else
 		struct net_device *vd = __vlan_find_dev_deep_rcu(dev, skb->vlan_proto, vid);
@@ -195,7 +191,7 @@ static void vlan_do_notify(struct work_struct *w)
 
 		if (!report_skb) {
 			report_skb = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) && RHEL_MAJOR < 7
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 			header = genlmsg_put(report_skb, 0, vlan_mon_nl_mcg.id, &vlan_mon_nl_family, 0, VLAN_MON_NOTIFY);
 #else
 			header = genlmsg_put(report_skb, 0, vlan_mon_nl_family.mcgrp_offset, &vlan_mon_nl_family, 0, VLAN_MON_NOTIFY);
@@ -222,7 +218,7 @@ static void vlan_do_notify(struct work_struct *w)
 
 		if (nla_nest_end(report_skb, ns) >= VLAN_MON_NLMSG_SIZE || id == 255) {
 			genlmsg_end(report_skb, header);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) && RHEL_MAJOR < 7
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 			genlmsg_multicast(report_skb, 0, vlan_mon_nl_mcg.id, GFP_KERNEL);
 #else
 			genlmsg_multicast(&vlan_mon_nl_family, report_skb, 0, 0, GFP_KERNEL);
@@ -241,7 +237,7 @@ nl_err:
 
 	if (report_skb) {
 		genlmsg_end(report_skb, header);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) && RHEL_MAJOR < 7
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 		genlmsg_multicast(report_skb, 0, vlan_mon_nl_mcg.id, GFP_KERNEL);
 #else
 		genlmsg_multicast(&vlan_mon_nl_family, report_skb, 0, 0, GFP_KERNEL);
@@ -492,7 +488,7 @@ static void vlan_dev_clean(struct vlan_dev *d, struct net_device *dev, struct li
 		if (d->busy[i / (8*sizeof(long))] & (1lu << (i % (8*sizeof(long))))) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
 			vd = __vlan_find_dev_deep(dev, i);
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0) && RHEL_MAJOR < 7
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
 			vd = __vlan_find_dev_deep(dev, htons(ETH_P_8021Q), i);
 			if (!vd)
 				vd = __vlan_find_dev_deep(dev, htons(ETH_P_8021AD), i);
@@ -663,7 +659,15 @@ static struct genl_ops vlan_mon_nl_ops[] = {
 	},
 };
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) && RHEL_MAJOR < 7
+static struct genl_family vlan_mon_nl_family = {
+	.id		= GENL_ID_GENERATE,
+	.name		= VLAN_MON_GENL_NAME,
+	.version	= VLAN_MON_GENL_VERSION,
+	.hdrsize	= 0,
+	.maxattr	= VLAN_MON_ATTR_MAX,
+};
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 static struct genl_multicast_group vlan_mon_nl_mcg = {
 	.name = VLAN_MON_GENL_MCG,
 };
@@ -672,23 +676,6 @@ static struct genl_multicast_group vlan_mon_nl_mcgs[] = {
 	{ .name = VLAN_MON_GENL_MCG, }
 };
 #endif
-
-static struct genl_family vlan_mon_nl_family = {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,10,0)
-	.id		= GENL_ID_GENERATE,
-#endif
-	.name		= VLAN_MON_GENL_NAME,
-	.version	= VLAN_MON_GENL_VERSION,
-	.hdrsize	= 0,
-	.maxattr	= VLAN_MON_ATTR_MAX,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
-	.module = THIS_MODULE,
-	.ops = vlan_mon_nl_ops,
-	.n_ops = ARRAY_SIZE(vlan_mon_nl_ops),
-	.mcgrps = vlan_mon_nl_mcgs,
-	.n_mcgrps = ARRAY_SIZE(vlan_mon_nl_mcgs),
-#endif
-};
 
 static struct packet_type vlan_pt __read_mostly = {
 	.type = __constant_htons(ETH_P_ALL),
@@ -706,19 +693,17 @@ static int __init vlan_mon_init(void)
 
 	INIT_WORK(&vlan_notify_work, vlan_do_notify);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) && RHEL_MAJOR < 7
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 	err = genl_register_family_with_ops(&vlan_mon_nl_family, vlan_mon_nl_ops, ARRAY_SIZE(vlan_mon_nl_ops));
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(4,10,0)
-	err = genl_register_family_with_ops_groups(&vlan_mon_nl_family, vlan_mon_nl_ops, vlan_mon_nl_mcgs);
 #else
-	err = genl_register_family(&vlan_mon_nl_family);
+	err = genl_register_family_with_ops_groups(&vlan_mon_nl_family, vlan_mon_nl_ops, vlan_mon_nl_mcgs);
 #endif
 	if (err < 0) {
 		printk(KERN_INFO "vlan_mon: can't register netlink interface\n");
 		goto out;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) && RHEL_MAJOR < 7
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 	err = genl_register_mc_group(&vlan_mon_nl_family, &vlan_mon_nl_mcg);
 	if (err < 0) {
 		printk(KERN_INFO "vlan_mon: can't register netlink multicast group\n");
@@ -730,7 +715,7 @@ static int __init vlan_mon_init(void)
 
 	return 0;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) && RHEL_MAJOR < 7
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 out_unreg:
 #endif
 	genl_unregister_family(&vlan_mon_nl_family);
@@ -747,7 +732,7 @@ static void __exit vlan_mon_fini(void)
 
 	dev_remove_pack(&vlan_pt);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) && RHEL_MAJOR < 7
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0)
 	genl_unregister_mc_group(&vlan_mon_nl_family, &vlan_mon_nl_mcg);
 #endif
 	genl_unregister_family(&vlan_mon_nl_family);

@@ -63,7 +63,6 @@ void __export ap_session_init(struct ap_session *ses)
 	INIT_LIST_HEAD(&ses->pd_list);
 	ses->ifindex = -1;
 	ses->unit_idx = -1;
-	ses->net = net;
 }
 
 void __export ap_session_set_ifindex(struct ap_session *ses)
@@ -169,8 +168,6 @@ void __export ap_session_activate(struct ap_session *ses)
 		triton_timer_add(ses->ctrl->ctx, &ses->timer, 0);
 	}
 
-	triton_context_set_priority(ses->ctrl->ctx, 2);
-
 #ifdef USE_BACKUP
 	if (!ses->backup)
 		backup_save_session(ses);
@@ -243,9 +240,6 @@ void __export ap_session_finished(struct ap_session *ses)
 		ses->ifname_rename = NULL;
 	}
 
-	if (ses->net)
-		ses->net->release(ses->net);
-
 	if (ses->timer.tpd)
 		triton_timer_del(&ses->timer);
 
@@ -266,8 +260,6 @@ void __export ap_session_terminate(struct ap_session *ses, int cause, int hard)
 {
 	if (ses->terminated)
 		return;
-
-	triton_context_set_priority(ses->ctrl->ctx, 3);
 
 	if (!ses->stop_time)
 		ses->stop_time = _time();
@@ -425,10 +417,6 @@ int __export ap_session_set_username(struct ap_session *s, char *username)
 					_free(username);
 					return -1;
 				} else {
-					if (!ses->wakeup) {
-						ses->wakeup = s->ctrl->ctx;
-						wait = 1;
-					}
 					ap_session_ifdown(ses);
 					triton_context_call(ses->ctrl->ctx, (triton_event_func)__terminate_sec, ses);
 					continue;

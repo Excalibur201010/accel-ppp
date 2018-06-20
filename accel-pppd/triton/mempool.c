@@ -107,6 +107,9 @@ void __export *mempool_alloc(mempool_t *pool)
 		__sync_sub_and_fetch(&triton_stat.mempool_available, size);
 
 		return it->ptr;
+#ifdef VALGRIND
+		}
+#endif
 	}
 	spin_unlock(&p->lock);
 
@@ -120,7 +123,7 @@ void __export *mempool_alloc(mempool_t *pool)
 		mmap_ptr += size;
 		spin_unlock(&mmap_lock);
 		__sync_sub_and_fetch(&triton_stat.mempool_available, size);
-	} else {
+	}	else {
 		it = _malloc(size);
 		__sync_add_and_fetch(&triton_stat.mempool_allocated, size);
 	}

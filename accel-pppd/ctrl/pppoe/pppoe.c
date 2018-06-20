@@ -88,8 +88,7 @@ struct iplink_arg {
 };
 
 int conf_verbose;
-char *conf_service_name[255];
-int conf_accept_any_service;
+char *conf_service_name;
 char *conf_ac_name;
 int conf_ifname_in_sid;
 char *conf_pado_delay;
@@ -98,7 +97,6 @@ int conf_padi_limit = 0;
 int conf_mppe = MPPE_UNSET;
 int conf_sid_uppercase = 0;
 static const char *conf_ip_pool;
-static const char *conf_ifname;
 enum {CSID_MAC, CSID_IFNAME, CSID_IFNAME_MAC};
 static int conf_called_sid;
 static int conf_cookie_timeout;
@@ -266,7 +264,7 @@ static int pppoe_rad_send_accounting_request(struct rad_plugin_t *rad, struct ra
 static void pppoe_conn_ctx_switch(struct triton_context_t *ctx, void *arg)
 {
 	struct pppoe_conn_t *conn = arg;
-	net = conn->ppp.ses.net;
+	net = conn->serv->net;
 	log_switch(ctx, &conn->ppp.ses);
 }
 
@@ -402,14 +400,11 @@ static struct pppoe_conn_t *allocate_channel(struct pppoe_serv_t *serv, const ui
 
 	ppp_init(&conn->ppp);
 
-	conn->ppp.ses.net = serv->net;
 	conn->ppp.ses.ctrl = &conn->ctrl;
 	conn->ppp.ses.chan_name = conn->ctrl.calling_station_id;
 
 	if (conf_ip_pool)
 		conn->ppp.ses.ipv4_pool_name = _strdup(conf_ip_pool);
-	if (conf_ifname)
-		conn->ppp.ses.ifname_rename = _strdup(conf_ifname);
 
 	triton_context_register(&conn->ctx, conn);
 
@@ -763,13 +758,8 @@ static void pppoe_send_PADO(struct pppoe_serv_t *serv, const uint8_t *addr, cons
 	setup_header(pack, serv->hwaddr, addr, CODE_PADO, 0);
 
 	add_tag(pack, TAG_AC_NAME, (uint8_t *)conf_ac_name, strlen(conf_ac_name));
-	if (conf_service_name[0]) {
-		int i = 0;
-		do {
-		    add_tag(pack, TAG_SERVICE_NAME, (uint8_t *)conf_service_name[i], strlen(conf_service_name[i]));
-		    i++;
-		} while(conf_service_name[i]);
-	}
+	if (conf_service_name)
+		add_tag(pack, TAG_SERVICE_NAME, (uint8_t *)conf_service_name, strlen(conf_service_name));
 
 	if (service_name)
 		add_tag2(pack, service_name);
@@ -949,7 +939,7 @@ static void pppoe_recv_PADI(struct pppoe_serv_t *serv, uint8_t *pack, int size)
 	struct pppoe_tag *host_uniq_tag = NULL;
 	struct pppoe_tag *relay_sid_tag = NULL;
 	struct pppoe_tag *service_name_tag = NULL;
-	int len, n, service_match = conf_service_name[0] == NULL;
+	int len, n, service_match = conf_service_name == NULL;
 	struct delayed_pado_t *pado;
 	struct timespec ts;
 	uint16_t ppp_max_payload = 0;
@@ -986,16 +976,12 @@ static void pppoe_recv_PADI(struct pppoe_serv_t *serv, uint8_t *pack, int size)
 			case TAG_END_OF_LIST:
 				break;
 			case TAG_SERVICE_NAME:
-				if (conf_service_name[0]) {
-					int svc_index = 0;
-					do {
-					    if (ntohs(tag->tag_len) == strlen(conf_service_name[svc_index]) &&
-						memcmp(tag->tag_data, conf_service_name[svc_index], ntohs(tag->tag_len)) == 0) {
-						    service_match = 1;
-						    break;
-					    }
-					    svc_index++;
-					} while(conf_service_name[svc_index]);
+				if (conf_service_name) {
+					if (ntohs(tag->tag_len) != strlen(conf_service_name))
+						break;
+					if (memcmp(tag->tag_data, conf_service_name, ntohs(tag->tag_len)))
+						break;
+					service_match = 1;
 				} else
 					service_name_tag = tag;
 				break;
@@ -1015,7 +1001,7 @@ static void pppoe_recv_PADI(struct pppoe_serv_t *serv, uint8_t *pack, int size)
 	if (conf_verbose)
 		print_packet(serv->ifname, "recv", pack);
 
-	if (!service_match && !conf_accept_any_service) {
+	if (!service_match) {
 		if (conf_verbose)
 			log_warn("pppoe: discarding PADI packet (Service-Name mismatch)\n");
 		return;
@@ -1055,8 +1041,7 @@ static void pppoe_recv_PADI(struct pppoe_serv_t *serv, uint8_t *pack, int size)
 		pado->ppp_max_payload = ppp_max_payload;
 
 		pado->timer.expire = pado_timer;
-		pado->timer.expire_tv.tv_sec = pado_delay / 1000;
-		pado->timer.expire_tv.tv_usec = (pado_delay % 1000) * 1000;
+		pado->timer.period = pado_delay;
 
 		triton_timer_add(&serv->ctx, &pado->timer, 0);
 
@@ -1124,16 +1109,12 @@ static void pppoe_recv_PADR(struct pppoe_serv_t *serv, uint8_t *pack, int size)
 				service_name_tag = tag;
 				if (tag->tag_len == 0)
 					service_match = 1;
-				else if (conf_service_name[0]) {
-					int svc_index = 0;
-					do {
-					    if (ntohs(tag->tag_len) == strlen(conf_service_name[svc_index]) &&
-						memcmp(tag->tag_data, conf_service_name[svc_index], ntohs(tag->tag_len)) == 0) {
-						    service_match = 1;
-						    break;
-					    }
-					    svc_index++;
-					} while(conf_service_name[svc_index]);
+				else if (conf_service_name) {
+					if (ntohs(tag->tag_len) != strlen(conf_service_name))
+						break;
+					if (memcmp(tag->tag_data, conf_service_name, ntohs(tag->tag_len)))
+						break;
+					service_match = 1;
 				} else {
 					service_match = 1;
 				}
@@ -1179,7 +1160,7 @@ static void pppoe_recv_PADR(struct pppoe_serv_t *serv, uint8_t *pack, int size)
 		return;
 	}
 
-	if (!service_match && !conf_accept_any_service) {
+	if (!service_match) {
 		if (conf_verbose)
 			log_warn("pppoe: Service-Name mismatch\n");
 		pppoe_send_err(serv, ethhdr->h_source, host_uniq_tag, relay_sid_tag, CODE_PADS, TAG_SERVICE_NAME_ERROR);
@@ -1291,7 +1272,7 @@ static void pppoe_serv_timeout(struct triton_timer_t *t)
 	pppoe_server_free(serv);
 }
 
-static int parse_server(const char *opt, int *padi_limit, struct ap_net **net)
+static int parse_server(const char *opt, int *padi_limit, const struct ap_net **net)
 {
 	char *ptr, *endptr;
 	char name[64];
@@ -1399,7 +1380,7 @@ static void __pppoe_server_start(const char *ifname, const char *opt, void *cli,
 	struct pppoe_serv_t *serv;
 	struct ifreq ifr;
 	int padi_limit = conf_padi_limit;
-	struct ap_net *net = def_net;
+	const struct ap_net *net = &def_net;
 
 	if (parse_server(opt, &padi_limit, &net)) {
 		if (cli)
@@ -1487,7 +1468,7 @@ static void __pppoe_server_start(const char *ifname, const char *opt, void *cli,
 		goto out_err;
 	}
 
-	if (parent_ifindex == -1 && net == def_net)
+	if (parent_ifindex == -1 && net == &def_net)
 		vid = iplink_vlan_get_vid(ifr.ifr_ifindex, &parent_ifindex);
 
 	serv->ctx.close = pppoe_serv_close;
@@ -1891,6 +1872,9 @@ static void load_vlan_mon(struct conf_sect_t *sect)
 	long mask[4096/8/sizeof(long)];
 	static int registered = 0;
 
+	if (!triton_module_loaded("vlan-mon"))
+		return;
+
 	if (!registered) {
 		vlan_mon_register_proto(ETH_P_PPP_DISC, pppoe_vlan_mon_notify);
 		registered = 1;
@@ -1925,10 +1909,6 @@ static void load_config(void)
 	if (opt)
 		conf_verbose = atoi(opt);
 
-	opt = conf_get_opt("pppoe", "accept-any-service");
-	if (opt)
-	    conf_accept_any_service = atoi(opt);
-
 	opt = conf_get_opt("pppoe", "ac-name");
 	if (!opt)
 		opt = conf_get_opt("pppoe", "AC-Name");
@@ -1943,23 +1923,9 @@ static void load_config(void)
 	if (!opt)
 		opt = conf_get_opt("pppoe", "Service-Name");
 	if (opt) {
-		if (conf_service_name[0]) {
-			int i = 0;
-			do {
-			    _free(conf_service_name[i]);
-			    i++;
-			} while(conf_service_name[i]);
-			conf_service_name[0] = NULL;
-		}
-		char *conf_service_name_string = _strdup(opt);
-		char *p = strtok (conf_service_name_string, ",");
-		int i = 0;
-		while (p != NULL && i<255) {
-		    conf_service_name[i++] = _strdup(p);
-		    p = strtok(NULL, ",");
-		}
-		conf_service_name[i] = NULL;
-		_free(conf_service_name_string);
+		if (conf_service_name)
+			_free(conf_service_name);
+		conf_service_name = _strdup(opt);
 	}
 
 	opt = conf_get_opt("pppoe", "ifname-in-sid");
@@ -2013,7 +1979,6 @@ static void load_config(void)
 	}
 
 	conf_ip_pool = conf_get_opt("pppoe", "ip-pool");
-	conf_ifname = conf_get_opt("pppoe", "ifname");
 
 	conf_called_sid = CSID_MAC;
 	opt = conf_get_opt("pppoe", "called-sid");
@@ -2076,7 +2041,6 @@ static void pppoe_init(void)
 	conn_pool = mempool_create(sizeof(struct pppoe_conn_t));
 	pado_pool = mempool_create(sizeof(struct delayed_pado_t));
 	padi_pool = mempool_create(sizeof(struct padi_t));
-	conf_service_name[0] = NULL;
 
 	if (!conf_get_section("pppoe")) {
 		log_error("pppoe: no configuration, disabled...\n");

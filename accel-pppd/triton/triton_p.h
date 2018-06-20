@@ -2,15 +2,12 @@
 #define TRITON_P_H
 
 #include <pthread.h>
-#include <sys/ucontext.h>
 #include <sys/epoll.h>
 
 #include "triton.h"
 #include "list.h"
 #include "spinlock.h"
 #include "mempool.h"
-
-#define CTX_PRIO_MAX 4
 
 struct _triton_thread_t
 {
@@ -20,7 +17,7 @@ struct _triton_thread_t
 	int terminate;
 	struct _triton_context_t *ctx;
 	pthread_mutex_t sleep_lock;
-	struct list_head wakeup_list[CTX_PRIO_MAX];
+	pthread_cond_t sleep_cond;
 };
 
 struct _triton_context_t
@@ -45,8 +42,6 @@ struct _triton_context_t
 	int pending;
 	int priority;
 	int refs;
-
-	ucontext_t *uc;
 
 	struct triton_context_t *ud;
 	void *bf_arg;

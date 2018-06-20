@@ -111,9 +111,9 @@ static void config_reload(int num)
 static void close_all_fd(void)
 {
 	DIR *dirp;
-	struct dirent *ent;
+	struct dirent ent, *res;
 	char path[128];
-	int fd, dir_fd;
+	int fd;
 
 	sprintf(path, "/proc/%u/fd", getpid());
 
@@ -121,15 +121,14 @@ static void close_all_fd(void)
 	if (!dirp)
 		return;
 
-	dir_fd = dirfd(dirp);
-
 	while (1) {
-		ent = readdir(dirp);
-		if (!ent)
+		if (readdir_r(dirp, &ent, &res))
+			return;
+		if (!res)
 			break;
 
-		fd = atol(ent->d_name);
-		if (fd > 2 && fd != dir_fd)
+		fd = atol(ent.d_name);
+		if (fd > 2)
 			close(fd);
 	}
 
@@ -229,11 +228,6 @@ static void shutdown_cb()
 	pthread_mutex_unlock(&lock);
 }
 
-static void log_version()
-{
-	log_msg("accel-ppp version %s\n", ACCEL_PPP_VERSION);
-}
-
 int main(int _argc, char **_argv)
 {
 	sigset_t set;
@@ -242,7 +236,6 @@ int main(int _argc, char **_argv)
 	struct sigaction sa;
 	int pagesize = sysconf(_SC_PAGE_SIZE);
 	int internal = 0;
-	int no_sigint = 0;
 
 	argc = _argc;
 	argv = _argv;
@@ -270,8 +263,6 @@ int main(int _argc, char **_argv)
 			mprotect(conf_dump, len, PROT_READ);
 		} else if (!strcmp(argv[i], "--internal"))
 			internal = 1;
-		else if (!strcmp(argv[i], "--no-sigint"))
-			no_sigint = 1;
 	}
 
 	if (!conf_file)
@@ -320,12 +311,13 @@ int main(int _argc, char **_argv)
 	openssl_init();
 #endif
 
-	triton_register_init(0, log_version);
-
 	if (triton_load_modules("modules"))
 		return EXIT_FAILURE;
 
+	log_msg("accel-ppp version %s\n", ACCEL_PPP_VERSION);
+
 	triton_run();
+
 
 	sigfillset(&set);
 
@@ -347,21 +339,19 @@ int main(int _argc, char **_argv)
 	sigdelset(&set, SIGBUS);
 	sigdelset(&set, SIGHUP);
 	sigdelset(&set, SIGIO);
+	sigdelset(&set, SIGINT);
 	sigdelset(&set, SIGUSR1);
 	sigdelset(&set, 35);
 	sigdelset(&set, 36);
-	if (no_sigint)
-		sigdelset(&set, SIGINT);
 	pthread_sigmask(SIG_SETMASK, &set, &orig_set);
 
 	sigemptyset(&set);
+	//sigaddset(&set, SIGINT);
 	sigaddset(&set, SIGTERM);
 	sigaddset(&set, SIGSEGV);
 	sigaddset(&set, SIGILL);
 	sigaddset(&set, SIGFPE);
 	sigaddset(&set, SIGBUS);
-	if (!no_sigint)
-		sigaddset(&set, SIGINT);
 
 #ifdef USE_BACKUP
 	backup_restore(internal);

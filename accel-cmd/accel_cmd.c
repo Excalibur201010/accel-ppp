@@ -21,7 +21,6 @@
 struct host_params {
 	const char *str_addr;
 	const char *str_port;
-	char *passwd;
 	sa_family_t family;
 	int fd;
 };
@@ -184,7 +183,7 @@ static int accel_talk(int cmdfd, int accelfd, const struct msghdr *mhdr,
 	fd_set rfds;
 	fd_set wfds;
 	ssize_t res;
-	char last_char = '\0';
+	char last_char;
 	int cmdflg = -1;
 	int accelflg = -1;
 	size_t bytes_rd = 0;
@@ -361,16 +360,11 @@ out:
 	return err;
 }
 
-static struct msghdr *argv_to_msghdr(int argc, char * const *argv, const char *passwd)
+static struct msghdr *argv_to_msghdr(int argc, char * const *argv)
 {
 	struct msghdr *mh = NULL;
 	struct iovec *iv = NULL;
-	int indx, ividx = 0, ivlen = 0;
-
-	if (passwd && *passwd)
-		ivlen += 2;
-	if (argc)
-		ivlen += argc * 2 - 1;
+	int indx;
 
 	mh = calloc(1, sizeof(struct msghdr));
 	if (mh == NULL) {
@@ -379,7 +373,7 @@ static struct msghdr *argv_to_msghdr(int argc, char * const *argv, const char *p
 			__func__, __LINE__, strerror(errno));
 		return NULL;
 	}
-	iv = calloc(ivlen, sizeof(struct iovec));
+	iv = calloc(argc * 2 - 1, sizeof(struct iovec));
 	if (iv == NULL) {
 		fprintf(stderr, "%s,%i: Impossible to allocate buffer:"
 			" calloc() failed: %s\n",
@@ -388,23 +382,17 @@ static struct msghdr *argv_to_msghdr(int argc, char * const *argv, const char *p
 		return NULL;
 	}
 
-	if (passwd && *passwd) {
-		iv[ividx].iov_base = (void *) passwd;
-		iv[ividx++].iov_len = strlen(passwd);
-		iv[ividx].iov_base = "\n";
-		iv[ividx++].iov_len = 1;
+	for (indx = 0; indx < argc - 1; ++indx) {
+		iv[indx * 2].iov_base = argv[indx];
+		iv[indx * 2].iov_len = strlen(argv[indx]);
+		iv[indx * 2 + 1].iov_base = " ";
+		iv[indx * 2 + 1].iov_len = 1;
 	}
-	for (indx = 0; indx < argc; ++indx) {
-		if (indx) {
-		    iv[ividx].iov_base = " ";
-		    iv[ividx++].iov_len = 1;
-		}
-		iv[ividx].iov_base = argv[indx];
-		iv[ividx++].iov_len = strlen(argv[indx]);
-	}
+	iv[indx * 2].iov_base = argv[indx];
+	iv[indx * 2].iov_len = strlen(argv[indx]);
 
 	mh->msg_iov = iv;
-	mh->msg_iovlen = ivlen;
+	mh->msg_iovlen = argc * 2 - 1;
 
 	return mh;
 }
@@ -565,7 +553,6 @@ static void print_help(const char *name)
 	printf("\t-p, --port\t- Set remote port to use for communicating"
 	       " with HOST. Defaults to \"%s\".\n", DEFAULT_PORT);
 	printf("\t-t, --timeout\t- Set inactivity timeout.\n");
-	printf("\t-P, --password\t- Set password for accessing HOST.\n");
 	printf("\t-v, --verbose\t- Verbose output.\n");
 	printf("\t-V, --version\t- Display version number and exit.\n");
 	printf("\t-h, --help\t- Display this help message and exit.\n");
@@ -603,11 +590,6 @@ int main(int argc, char **argv)
 		 .has_arg = required_argument,
 		 .flag = NULL,
 		 .val = 't'
-		},
-		{.name = "password",
-		 .has_arg = required_argument,
-		 .flag = NULL,
-		 .val = 'P'
 		},
 		{.name = "verbose",
 		 .has_arg = no_argument,
@@ -648,7 +630,7 @@ int main(int argc, char **argv)
 	char ochar;
 	int rv;
 
-	while ((ochar = getopt_long(argc, argv, "f:46ni:H:p:t:P:vVh-",
+	while ((ochar = getopt_long(argc, argv, "f:46ni:H:p:t:vVh-",
 				    long_opts, &oindx)) != -1) {
 		if (ochar == '-')
 			/* End of options, interpret the following arguments
@@ -692,12 +674,6 @@ int main(int argc, char **argv)
 				return XSTATUS_BADPARAM;
 			}
 			break;
-		case 'P':
-			if (peer.passwd)
-				free(peer.passwd);
-			peer.passwd = strdup(optarg);
-			memset(optarg, '*', strlen(optarg));
-			break;
 		case 'v':
 			verbose = true;
 			break;
@@ -713,16 +689,14 @@ int main(int argc, char **argv)
 		};
 	}
 
-	if (optind < argc || peer.passwd) {
-		mh = argv_to_msghdr(argc - optind, argv + optind, peer.passwd);
+	if (optind < argc) {
+		mh = argv_to_msghdr(argc - optind, argv + optind);
 		if (mh == NULL) {
 			rv = XSTATUS_INTERNAL;
 			goto out;
 		}
-	}
-	if (optind < argc)
 		inputstream = -1;
-	else
+	} else
 		inputstream = STDIN_FILENO;
 
 	rv = accel_connect(&peer, numeric);
@@ -737,10 +711,9 @@ int main(int argc, char **argv)
 	rv = accel_talk(inputstream, peer.fd, mh, timeo);
 
 out:
-	if (peer.fd >= 0)
+	if (peer.fd >= 0) {
 		close(peer.fd);
-	if (peer.passwd)
-		free(peer.passwd);
+	}
 	if (mh)
 		msghdr_free(mh);
 

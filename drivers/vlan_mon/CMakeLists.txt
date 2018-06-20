@@ -14,6 +14,4 @@ ADD_CUSTOM_TARGET(vlan_mon_drv ALL
 	DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/driver/vlan_mon.ko
 )
 
-if (NOT DEFINED CPACK_TYPE)
-	INSTALL(CODE "EXECUTE_PROCESS(COMMAND make -C ${KDIR} M=${CMAKE_CURRENT_BINARY_DIR}/drivers/vlan_mon modules_install)")
-endif ()
+INSTALL(CODE "EXECUTE_PROCESS(COMMAND make -C ${KDIR} M=${CMAKE_CURRENT_BINARY_DIR}/drivers/vlan_mon modules_install)")

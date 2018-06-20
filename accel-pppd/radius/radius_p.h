@@ -29,7 +29,6 @@ struct framed_route {
 	in_addr_t dst;
 	int mask;
 	in_addr_t gw;
-	uint32_t prio;
 	struct framed_route *next;
 };
 
@@ -43,8 +42,6 @@ struct radius_pd_t {
 	int acct_started:1;
 	int ipv6_dp_assigned:1;
 	int ipv6_dp_sent:1;
-
-	struct rad_packet_t *auth_reply;
 
 	struct rad_req_t *acct_req;
 	struct triton_timer_t acct_interim_timer;
@@ -86,10 +83,8 @@ struct rad_req_t {
 	in_addr_t server_addr;
 
 	int server_port;
-	int type;
-	int prio;
-	int try;
-
+	int type:8;
+	int try:6;
 	int active:1;
 	int async:1;
 
@@ -118,7 +113,7 @@ struct rad_server_t {
 	int fail_timeout;
 	int max_fail;
 
-	struct list_head req_queue[2];
+	struct list_head req_queue;
 	int client_cnt[2];
 	time_t fail_time;
 	int timeout_cnt;
@@ -185,7 +180,7 @@ struct radius_pd_t *rad_find_session_pack(struct rad_packet_t *pack);
 int rad_dict_load(const char *fname);
 void rad_dict_free(struct rad_dict_t *dict);
 
-struct rad_req_t *rad_req_alloc(struct radius_pd_t *rpd, int code, const char *username, int prio);
+struct rad_req_t *rad_req_alloc(struct radius_pd_t *rpd, int code, const char *username);
 struct rad_req_t *rad_req_alloc2(struct radius_pd_t *rpd, int code, const char *username, in_addr_t addr, int port);
 struct rad_req_t *rad_req_alloc_empty();
 int rad_req_acct_fill(struct rad_req_t *);

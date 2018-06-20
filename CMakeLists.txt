@@ -2,15 +2,11 @@ cmake_minimum_required(VERSION 2.6)
 cmake_policy(SET CMP0005 NEW)
 cmake_policy(SET CMP0003 OLD)
 
-#if (CMAKE_BINARY_DIR STREQUAL CMAKE_HOME_DIRECTORY)
-#    message(FATAL_ERROR "Building in source directory is forbidden. Please make separated build directory.")
-#endif ()
-
 project(accel-ppp C)
 
 include(cmake/cpack.cmake)
 
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -fno-strict-aliasing -D_GNU_SOURCE -fPIC -rdynamic -Wno-unused-result")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -fno-strict-aliasing -D_GNU_SOURCE -fPIC -rdynamic")
 
 IF (NOT DEFINED LIB_SUFFIX)
 	EXECUTE_PROCESS(
@@ -48,7 +44,7 @@ IF (EXISTS ${CMAKE_HOME_DIRECTORY}/.git AND NOT IGNORE_GIT)
 	)
 	STRING(STRIP ${ACCEL_PPP_VERSION} ACCEL_PPP_VERSION)
 ELSE (EXISTS ${CMAKE_HOME_DIRECTORY}/.git AND NOT IGNORE_GIT)
-	SET (ACCEL_PPP_VERSION 1.11.0)
+	SET (ACCEL_PPP_VERSION 1.11.2)
 ENDIF (EXISTS ${CMAKE_HOME_DIRECTORY}/.git AND NOT IGNORE_GIT)
 
 ADD_DEFINITIONS(-DACCEL_PPP_VERSION="${ACCEL_PPP_VERSION}")
@@ -87,8 +83,6 @@ if (NOT BUILD_DRIVER_ONLY)
 	add_subdirectory(accel-pppd)
 	add_subdirectory(crypto)
 	add_subdirectory(accel-cmd)
-
-	install(DIRECTORY DESTINATION /var/log/accel-ppp)
 endif (NOT BUILD_DRIVER_ONLY)
 
 if (BUILD_PPTP_DRIVER)

@@ -14,8 +14,6 @@
 #define ATTR_TYPE_IFID    5
 #define ATTR_TYPE_IPV6ADDR 6
 #define ATTR_TYPE_IPV6PREFIX 7
-#define ATTR_TYPE_ETHER   8
-#define ATTR_TYPE_TLV     9
 
 #define CODE_ACCESS_REQUEST 1
 #define CODE_ACCESS_ACCEPT  2
@@ -57,8 +55,6 @@ struct rad_dict_vendor_t
 {
 	struct list_head entry;
 	int id;
-	int tag;
-	int len;
 	const char *name;
 	struct list_head items;
 };
@@ -75,11 +71,8 @@ struct rad_dict_attr_t
 	struct list_head entry;
 	const char *name;
 	int id;
-	int type:30;
-	int array:1;
-	int size;
+	int type;
 	struct list_head values;
-	struct list_head tlv;
 };
 
 struct rad_attr_t
@@ -88,11 +81,8 @@ struct rad_attr_t
 	struct rad_dict_attr_t *attr;
 	struct rad_dict_vendor_t *vendor;
 	//struct rad_dict_value_t *val;
-	int len;
-	int cnt;
-	int alloc:1;
-	void *raw;
 	rad_value_t val;
+	int len;
 };
 
 struct rad_packet_t
@@ -110,6 +100,7 @@ struct rad_plugin_t
 	struct list_head entry;
 	int (*send_access_request)(struct rad_plugin_t *, struct rad_packet_t *pack);
 	int (*send_accounting_request)(struct rad_plugin_t *, struct rad_packet_t *pack);
+	int (*send_accounting_update)(struct rad_plugin_t *, struct rad_packet_t *pack);
 };
 
 struct ap_session;
@@ -132,6 +123,7 @@ int rad_packet_add_octets(struct rad_packet_t *pack, const char *vendor, const c
 int rad_packet_change_int(struct rad_packet_t *pack, const char *vendor, const char *name, int val);
 int rad_packet_change_val(struct rad_packet_t *pack, const char *vendor, const char *name, const char *val);
 int rad_packet_change_octets(struct rad_packet_t *pack, const char *vendor, const char *name, const uint8_t *val, int len);
+int rad_packet_change_str(struct rad_packet_t *pack, const char *vendor_name, const char *name, const char *val, int len);
 int rad_packet_add_ipaddr(struct rad_packet_t *pack, const char *vendor, const char *name, in_addr_t ipaddr);
 int rad_packet_add_ifid(struct rad_packet_t *pack, const char *vendor, const char *name, uint64_t ifid);
 int rad_packet_add_ipv6prefix(struct rad_packet_t *pack, const char *vendor, const char *name, struct in6_addr *prefix, int len);

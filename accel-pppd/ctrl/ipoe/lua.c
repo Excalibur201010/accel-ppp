@@ -11,7 +11,6 @@
 #include "events.h"
 #include "log.h"
 #include "utils.h"
-#include "luasupp.h"
 
 #include "ipoe.h"
 
@@ -34,10 +33,11 @@ static int packet4_options(lua_State *L);
 static int packet4_agent_circuit_id(lua_State *L);
 static int packet4_agent_remote_id(lua_State *L);
 static int packet4_vlan(lua_State *L);
-static int packet4_hwaddr(lua_State *L);
-static int packet4_ipaddr(lua_State *L);
 
-static const struct luaL_Reg packet4_lib [] = {
+int luaopen_lpack(lua_State *L);
+int luaopen_bit(lua_State *L);
+
+static const struct luaL_reg packet4_lib [] = {
 	{"hdr", packet4_hdr},
 	{"ifname", packet4_ifname},
 	{"option", packet4_option},
@@ -45,8 +45,6 @@ static const struct luaL_Reg packet4_lib [] = {
 	{"agent_circuit_id", packet4_agent_circuit_id},
 	{"agent_remote_id", packet4_agent_remote_id},
 	{"vlan", packet4_vlan},
-	{"hwaddr", packet4_hwaddr},
-	{"ipaddr", packet4_ipaddr},
 	{NULL, NULL}
 };
 
@@ -54,14 +52,14 @@ static int luaopen_packet4(lua_State *L)
 {
   luaL_newmetatable(L, IPOE_PACKET4);
 
-	lua_pushvalue(L, -1);
-	lua_setfield(L, -2, "__index");
+	lua_pushstring(L, "__index");
+	lua_pushvalue(L, -2);  /* pushes the metatable */
+	lua_settable(L, -3);  /* metatable.__index = metatable */
 
-#if LUA_VERSION_NUM < 502
-  luaL_register(L, NULL, packet4_lib);
-#else
-  luaL_setfuncs(L, packet4_lib, 0);
-#endif
+
+	luaI_openlib(L, NULL, packet4_lib, 0);
+
+  luaI_openlib(L, "packet4", packet4_lib, 0);
 
 	return 1;
 }
@@ -187,47 +185,16 @@ static int packet4_vlan(lua_State *L)
 	return 1;
 }
 
-static int packet4_hwaddr(lua_State *L)
-{
-	struct ipoe_session *ses = luaL_checkudata(L, 1, IPOE_PACKET4);
-	char str[20];
-
-	if (!ses)
-		return 0;
-
-	sprintf(str, "%02x:%02x:%02x:%02x:%02x:%02x",
-			ses->hwaddr[0], ses->hwaddr[1], ses->hwaddr[2], ses->hwaddr[3], ses->hwaddr[4], ses->hwaddr[5]);
-	lua_pushstring(L, str);
-
-	return 1;
-}
-
-static int packet4_ipaddr(lua_State *L)
-{
-	struct ipoe_session *ses = luaL_checkudata(L, 1, IPOE_PACKET4);
-	char str[20];
-
-	if (!ses)
-		return 0;
-
-	u_inet_ntoa(ses->yiaddr, str);
-	lua_pushstring(L, str);
-
-	return 1;
-}
-
 static void init_lua()
 {
 	__serial = serial;
 
-	L = luaL_newstate();
+	L = lua_open();
 
 	luaL_openlibs(L);
 
 	luaopen_lpack(L);
-#if LUA_VERSION_NUM < 503
 	luaopen_bit(L);
-#endif
 	luaopen_packet4(L);
 
 	if (luaL_loadfile(L, conf_filename))
@@ -297,8 +264,6 @@ char *ipoe_lua_get_username(struct ipoe_session *ses, const char *func)
 
 	lua_getglobal(L, func);
 	lua_pushlightuserdata(L, ses);
-	luaL_getmetatable(L, IPOE_PACKET4);
-	lua_setmetatable(L, -2);
 
 	if (lua_pcall(L, 1, 1, 0)) {
 		log_ppp_error("ipoe: lua: %s\n", lua_tostring(L, -1));

@@ -37,12 +37,10 @@ struct ipoe_serv {
 	int ifindex;
 	uint8_t hwaddr[ETH_ALEN];
 	struct list_head sessions;
-	unsigned int sess_cnt;
 	struct dhcpv4_serv *dhcpv4;
 	struct dhcpv4_relay *dhcpv4_relay;
 	void *arp;
 	struct list_head disc_list;
-	struct list_head arp_list;
 	struct list_head req_list;
 	struct triton_timer_t disc_timer;
 	struct triton_timer_t timer;
@@ -54,11 +52,9 @@ struct ipoe_serv {
 	uint32_t opt_src;
 	int opt_arp;
 	int opt_username;
-	int opt_mtu;
 #ifdef USE_LUA
 	char *opt_lua_username_func;
 #endif
-	int opt_weight;
 	int opt_shared:1;
 	int opt_dhcpv4:1;
 	int opt_up:1;
@@ -66,7 +62,6 @@ struct ipoe_serv {
 	int opt_ifcfg:1;
 	int opt_nat:1;
 	int opt_ipv6:1;
-	int opt_ip_unnumbered:1;
 	int need_close:1;
 	int active:1;
 	int vlan_mon:1;
@@ -105,7 +100,6 @@ struct ipoe_session {
 	int ifindex;
 	char *username;
 	struct ipv4db_item_t ipv4;
-	unsigned int weight;
 #ifdef RADIUS
 	struct rad_plugin_t radius;
 #endif
@@ -117,7 +111,6 @@ struct ipoe_session {
 	int l4_redirect_set:1;
 	int terminate:1;
 	int UP:1;
-	int wait_start:1;
 };
 
 struct ipoe_session_info {
@@ -126,8 +119,6 @@ struct ipoe_session_info {
 	uint32_t addr;
 	uint32_t peer_addr;
 };
-
-int ipoe_ipv6_nd_start(struct ipoe_serv *serv);
 
 #ifdef USE_LUA
 char *ipoe_lua_get_username(struct ipoe_session *, const char *func);
@@ -142,12 +133,11 @@ void ipoe_recv_up(int ifindex, struct ethhdr *eth, struct iphdr *iph, struct _ar
 struct ipoe_session *ipoe_session_alloc(const char *ifname);
 
 struct ipoe_serv *ipoe_find_serv(const char *ifname);
-void ipoe_serv_recv_arp(struct ipoe_serv *s, struct _arphdr *arph);
 
 void ipoe_nl_add_interface(int ifindex, uint8_t mode);
 void ipoe_nl_del_interface(int ifindex);
 void ipoe_nl_delete_interfaces(void);
-int ipoe_nl_create();
+int ipoe_nl_create(int ifindex);
 void ipoe_nl_delete(int ifindex);
 int ipoe_nl_modify(int ifindex, uint32_t peer_addr, uint32_t addr, uint32_t gw, int link_ifindex, uint8_t *hwaddr);
 void ipoe_nl_get_sessions(struct list_head *list);
@@ -158,7 +148,7 @@ void ipoe_nl_del_net(uint32_t addr);
 
 void *arpd_start(struct ipoe_serv *ipoe);
 void arpd_stop(void *arp);
-void arp_send(int ifindex, struct _arphdr *arph, int bc);
+void arp_send(int ifindex, struct _arphdr *arph);
 
 #endif
 
