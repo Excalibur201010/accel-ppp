@@ -2,6 +2,7 @@
 #define __AP_SESSION_H__
 
 #include <sys/socket.h>
+#include <pthread.h>
 
 #include "triton.h"
 #include "ap_net.h"
