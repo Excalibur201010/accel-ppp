@@ -2,7 +2,7 @@
 #define TRITON_P_H
 
 #include <pthread.h>
-#include <ucontext.h>
+#include <sys/ucontext.h>
 #include <sys/epoll.h>
 
 #include "triton.h"

@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <assert.h>
-#include <ucontext.h>
+#include <sys/ucontext.h>
 #include <setjmp.h>
 #include <sys/resource.h>
 
