@@ -2,6 +2,7 @@
 #define __AP_SESSION_H__
 
 #include "ap_net.h"
+#include <pthread.h>
 
 //#define AP_SESSIONID_LEN 16
 #define AP_IFNAME_LEN 16
