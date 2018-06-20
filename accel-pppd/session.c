@@ -112,7 +112,7 @@ int __export ap_session_starting(struct ap_session *ses)
 		ses->state = AP_STATE_STARTING;
 	}
 
-	__sync_add_and_fetch(&ap_session_stat.starting, 1);
+	__atomic_add_fetch(&ap_session_stat.starting, 1, __ATOMIC_SEQ_CST);
 
 	pthread_rwlock_wrlock(&ses_lock);
 	list_add_tail(&ses->entry, &ses_list);
@@ -156,7 +156,7 @@ void __export ap_session_activate(struct ap_session *ses)
 
 	ses->state = AP_STATE_ACTIVE;
 	__sync_sub_and_fetch(&ap_session_stat.starting, 1);
-	__sync_add_and_fetch(&ap_session_stat.active, 1);
+	__atomic_add_fetch(&ap_session_stat.active, 1, __ATOMIC_SEQ_CST);
 
 	if (ses->idle_timeout) {
 		ses->timer.expire = ap_session_timer;
@@ -281,7 +281,7 @@ void __export ap_session_terminate(struct ap_session *ses, int cause, int hard)
 	else
 		__sync_sub_and_fetch(&ap_session_stat.starting, 1);
 
-	__sync_add_and_fetch(&ap_session_stat.finishing, 1);
+	__atomic_add_fetch(&ap_session_stat.finishing, 1, __ATOMIC_SEQ_CST);
 	ses->terminating = 1;
 	ses->state = AP_STATE_FINISHING;
 
@@ -339,7 +339,7 @@ static void generate_sessionid(struct ap_session *ses)
 		sid = ++seq;
 		spin_unlock(&seq_lock);
 #else
-		sid = __sync_add_and_fetch(&seq, 1);
+		sid = __atomic_add_fetch(&seq, 1, __ATOMIC_SEQ_CST);
 #endif
 
 		clock_gettime(CLOCK_MONOTONIC, &ts);

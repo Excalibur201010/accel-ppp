@@ -140,7 +140,7 @@ static void* triton_thread(struct _triton_thread_t *thread)
 			//printf("thread %p: exit sigwait\n", thread);
 
 			spin_lock(&threads_lock);
-			__sync_add_and_fetch(&triton_stat.thread_active, 1);
+			__atomic_add_fetch(&triton_stat.thread_active, 1, __ATOMIC_SEQ_CST);
 			if (!thread->ctx) {
 				list_del(&thread->entry2);
 				spin_unlock(&threads_lock);
@@ -278,8 +278,8 @@ struct _triton_thread_t *create_thread()
 	while (pthread_create(&thread->thread, &attr, (void*(*)(void*))triton_thread, thread))
 		sleep(1);
 
-	__sync_add_and_fetch(&triton_stat.thread_count, 1);
-	__sync_add_and_fetch(&triton_stat.thread_active, 1);
+	__atomic_add_fetch(&triton_stat.thread_count, 1, __ATOMIC_SEQ_CST);
+	__atomic_add_fetch(&triton_stat.thread_active, 1, __ATOMIC_SEQ_CST);
 
 	return thread;
 }
@@ -302,7 +302,7 @@ int triton_queue_ctx(struct _triton_context_t *ctx)
 		spin_unlock(&threads_lock);
 		ctx->queued = 1;
 		log_debug2("ctx %p: queued\n", ctx);
-		__sync_add_and_fetch(&triton_stat.context_pending, 1);
+		__atomic_add_fetch(&triton_stat.context_pending, 1, __ATOMIC_SEQ_CST);
 		return 0;
 	}
 
@@ -347,8 +347,8 @@ int __export triton_context_register(struct triton_context_t *ud, void *bf_arg)
 	list_add_tail(&ctx->entry, &ctx_list);
 	spin_unlock(&ctx_list_lock);
 
-	__sync_add_and_fetch(&triton_stat.context_sleeping, 1);
-	__sync_add_and_fetch(&triton_stat.context_count, 1);
+	__atomic_add_fetch(&triton_stat.context_sleeping, 1, __ATOMIC_SEQ_CST);
+	__atomic_add_fetch(&triton_stat.context_count, 1, __ATOMIC_SEQ_CST);
 
 	return 0;
 }
@@ -425,7 +425,7 @@ void __export triton_context_schedule()
 	struct _triton_thread_t *t = NULL;
 
 	log_debug2("ctx %p: enter schedule\n", ctx);
-	__sync_add_and_fetch(&triton_stat.context_sleeping, 1);
+	__atomic_add_fetch(&triton_stat.context_sleeping, 1, __ATOMIC_SEQ_CST);
 	__sync_sub_and_fetch(&triton_stat.thread_active, 1);
 	pthread_mutex_lock(&ctx->thread->sleep_lock);
 	while (1) {
@@ -445,7 +445,7 @@ void __export triton_context_schedule()
 	}
 	pthread_mutex_unlock(&ctx->thread->sleep_lock);
 	__sync_sub_and_fetch(&triton_stat.context_sleeping, 1);
-	__sync_add_and_fetch(&triton_stat.thread_active, 1);
+	__atomic_add_fetch(&triton_stat.thread_active, 1, __ATOMIC_SEQ_CST);
 	log_debug2("ctx %p: exit schedule\n", ctx);
 }
 
