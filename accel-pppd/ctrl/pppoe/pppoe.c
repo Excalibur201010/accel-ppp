@@ -11,7 +11,6 @@
 #include <net/ethernet.h>
 #include <netpacket/packet.h>
 #include <arpa/inet.h>
-#include <printf.h>
 
 #include "crypto.h"
 
